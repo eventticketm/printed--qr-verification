@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101827">
+<title>Printed QR Verification System</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--bg:#f3f5f9;--panel:#fff;--ink:#172033;--muted:#687386;--line:#e2e7ef;--navy:#101827;--blue:#2563eb;--green:#15803d;--red:#b91c1c;--amber:#b45309}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:var(--navy);color:white;padding:20px max(16px,calc((100% - 1120px)/2))}
+header h1{font-size:22px;margin:0 0 4px}header p{margin:0;color:#c3ccda;font-size:13px}
+main{max-width:1120px;margin:20px auto;padding:0 14px 40px}
+.tabs{display:flex;gap:8px;overflow:auto;margin-bottom:16px}.tab{border:1px solid var(--line);background:white;color:var(--ink);padding:11px 15px;border-radius:10px;font-weight:650;white-space:nowrap;cursor:pointer}.tab.active{background:var(--blue);color:white;border-color:var(--blue)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:18px;margin-bottom:15px;box-shadow:0 2px 8px #17203308}
+h2{font-size:18px;margin:0 0 12px}.muted{color:var(--muted)}.small{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric{background:#f7f9fc;border:1px solid var(--line);border-radius:12px;padding:13px}.metric strong{display:block;font-size:25px;line-height:1.2}.metric span{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row>*{flex:0 0 auto}
+button,.file-label{border:0;border-radius:9px;background:var(--blue);color:white;padding:11px 14px;font-weight:650;cursor:pointer;font-size:14px}.secondary{background:#e9eef7;color:#26364f}.danger{background:#fee2e2;color:#991b1b}.success{background:#dcfce7;color:#166534}.warning{background:#fef3c7;color:#92400e}
+input,select{font:inherit;border:1px solid #cfd7e3;border-radius:9px;padding:10px;background:white;max-width:100%}input[type=file]{display:none}
+.field{display:flex;flex-direction:column;gap:5px;min-width:180px}.field label{font-size:12px;font-weight:700;color:#4b5563}
+#reader{width:100%;max-width:520px;margin:12px auto;border-radius:12px;overflow:hidden}#reader video{border-radius:10px}
+.result{padding:14px;border-radius:12px;margin-top:12px;border:1px solid var(--line);background:#f8fafc}.result.good{background:#f0fdf4;border-color:#86efac}.result.bad{background:#fef2f2;border-color:#fca5a5}.result.warn{background:#fffbeb;border-color:#fcd34d}
+.result strong{font-size:17px;display:block;margin-bottom:4px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f7f9fc;color:#475569;position:sticky;top:0}
+.table-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px;margin-top:12px}
+.pill{display:inline-block;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:750;background:#e2e8f0}.pill.good{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}.pill.warn{background:#fef3c7;color:#92400e}
+.hidden{display:none!important}.notice{padding:11px 13px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:13px;margin:10px 0}
+#scanValue{overflow-wrap:anywhere;word-break:break-word}.statusline{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+@media(max-width:650px){header{padding:17px 15px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:14px}main{margin-top:14px}.tabs{margin-right:-14px;padding-right:14px}.field{width:100%}.field input,.field select{width:100%}}
+</style>
+</head>
+<body>
+<header><h1>Printed QR Verification System</h1><p>Excel master register · Mobile camera scanning · Duplicate detection</p></header>
+<main>
+  <div class="tabs">
+    <button class="tab active" data-tab="setup">1. Master database</button>
+    <button class="tab" data-tab="scanner">2. Scan QR codes</button>
+    <button class="tab" data-tab="reports">3. Reports</button>
+  </div>
+
+  <section id="setup" class="view">
+    <div class="panel">
+      <h2>Import master Excel file</h2>
+      <p class="muted">Upload the Excel workbook containing your expected QR values. The file is processed in this browser; it is not sent to a server.</p>
+      <div class="row">
+        <label class="file-label" for="excelFile">Choose Excel file</label>
+        <input id="excelFile" type="file" accept=".xlsx,.xls,.csv">
+        <span id="fileName" class="small">No file selected</span>
+      </div>
+      <div id="columnSetup" class="hidden" style="margin-top:15px">
+        <div class="row">
+          <div class="field"><label for="sheetSelect">Worksheet</label><select id="sheetSelect"></select></div>
+          <div class="field"><label for="headerRow">Header row number</label><input id="headerRow" type="number" min="1" value="1"></div>
+          <div class="field"><label for="qrColumn">QR value column</label><select id="qrColumn"></select></div>
+          <div class="field"><label for="idColumn">Ticket / record ID column (optional)</label><select id="idColumn"></select></div>
+        </div>
+        <div class="row" style="margin-top:13px"><button id="loadMaster">Load and validate records</button></div>
+        <p class="small">Choose the column containing the exact text encoded inside each printed QR code. The ticket ID column is for identifying records in reports.</p>
+      </div>
+      <div id="masterMessage"></div>
+    </div>
+    <div class="panel">
+      <h2>Master database status</h2>
+      <div class="grid">
+        <div class="metric"><strong id="mTotal">0</strong><span>Records loaded</span></div>
+        <div class="metric"><strong id="mUnique">0</strong><span>Unique QR values</span></div>
+        <div class="metric"><strong id="mDup">0</strong><span>Duplicate records</span></div>
+        <div class="metric"><strong id="mBlank">0</strong><span>Blank QR values</span></div>
+      </div>
+      <div id="masterStatus" class="notice">Import an Excel file to begin.</div>
+      <div id="duplicatePreview"></div>
+    </div>
+  </section>
+
+  <section id="scanner" class="view hidden">
+    <div class="panel">
+      <div class="statusline"><div><h2>Scan printed QR code</h2><p class="muted">Use your phone's rear camera and hold the printed code steady inside the frame.</p></div><span id="cameraState" class="pill">Camera stopped</span></div>
+      <div class="notice">Camera access requires HTTPS (or localhost). Open this page through a secure HTTPS website on your phone.</div>
+      <div class="row">
+        <button id="startScan">Start camera</button>
+        <button id="stopScan" class="secondary" disabled>Stop camera</button>
+        <button id="switchCamera" class="secondary">Switch camera</button>
+      </div>
+      <div id="reader"></div>
+      <div id="scanResult" class="result"><strong>Waiting for scan</strong><span class="muted">Your verification result will appear here.</span></div>
+      <div class="row" style="margin-top:12px">
+        <div class="field" style="flex:1"><label for="manualValue">Manual QR value (camera fallback)</label><input id="manualValue" placeholder="Paste or type the decoded QR value"></div>
+        <button id="manualCheck" style="align-self:end">Verify value</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Scanning progress</h2>
+      <div class="grid">
+        <div class="metric"><strong id="sVerified">0</strong><span>Verified scans</span></div>
+        <div class="metric"><strong id="sUnknown">0</strong><span>Unknown scans</span></div>
+        <div class="metric"><strong id="sRepeated">0</strong><span>Repeated scans</span></div>
+        <div class="metric"><strong id="sPending">0</strong><span>Not yet scanned</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reports" class="view hidden">
+    <div class="panel">
+      <h2>Verification report</h2>
+      <div class="grid">
+        <div class="metric"><strong id="rTotal">0</strong><span>Master records</span></div>
+        <div class="metric"><strong id="rVerified">0</strong><span>Verified unique QR values</span></div>
+        <div class="metric"><strong id="rMissing">0</strong><span>Not yet verified</span></div>
+        <div class="metric"><strong id="rIssues">0</strong><span>Scan issues</span></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="exportScans">Export scan history</button>
+        <button id="exportMissing" class="secondary">Export missing codes</button>
+        <button id="exportDuplicates" class="secondary">Export master duplicates</button>
+      </div>
+    </div>
+    <div class="panel"><h2>Scan history</h2><div id="historyTable" class="muted">No scans recorded yet.</div></div>
+    <div class="panel"><h2>Master records not yet verified</h2><div id="missingTable" class="muted">Load a master Excel file first.</div></div>
+    <div class="panel"><h2>Duplicate values in master Excel</h2><div id="dupTable" class="muted">No master data loaded.</div></div>
+  </section>
+  <p class="small">Privacy and storage: this version stores the imported master records and scan history in this browser's local storage. Use the same browser/device for continuity. Export reports regularly and do not clear browser data until you have backed up your records.</p>
+</main>
+<script>
+let workbook=null, masterRows=[], masterGroups=new Map(), scans=[], scanner=null, cameras=[], cameraIndex=0, lastDecoded='', lastDecodedAt=0;
+const $=id=>document.getElementById(id);
+const clean=v=>String(v??'').trim();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const timeNow=()=>new Date().toLocaleString();
+function saveState(){try{localStorage.setItem('pqvs_master',JSON.stringify(masterRows));localStorage.setItem('pqvs_scans',JSON.stringify(scans));}catch(e){alert('Browser storage is full. Export your reports and use a smaller master file.');}}
+function restoreState(){try{masterRows=JSON.parse(localStorage.getItem('pqvs_master')||'[]');scans=JSON.parse(localStorage.getItem('pqvs_scans')||'[]');rebuildGroups();}catch(e){masterRows=[];scans=[];}refresh();}
+function rebuildGroups(){masterGroups=new Map();masterRows.forEach(r=>{if(!r.qr)return;let a=masterGroups.get(r.qr)||[];a.push(r);masterGroups.set(r.qr,a);});}
+function duplicateGroups(){return [...masterGroups.entries()].filter(([v,a])=>a.length>1);}
+function uniqueMasterValues(){return [...masterGroups.keys()];}
+function verifiedValues(){return new Set(scans.filter(s=>s.status==='VERIFIED').map(s=>s.qr));}
+function setTab(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('hidden',v.id!==name));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));if(name==='reports')renderReports();}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+$('excelFile').addEventListener('change',async e=>{
+ const f=e.target.files[0];if(!f)return;$('fileName').textContent=f.name;
+ try{const data=await f.arrayBuffer();workbook=XLSX.read(data,{type:'array',cellText:true,cellDates:false});$('sheetSelect').innerHTML=workbook.SheetNames.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join('');$('columnSetup').classList.remove('hidden');populateColumns();$('masterMessage').innerHTML='<div class="notice">File loaded. Select the worksheet and columns, then load the records.</div>';}catch(err){$('masterMessage').innerHTML='<div class="result bad">Could not read this file. Please use a valid .xlsx, .xls or .csv workbook.</div>';}
+});
+function populateColumns(){
+ const ws=workbook.Sheets[workbook.SheetNames[+$('sheetSelect').value||0]];
+ const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+ const row=Math.max(1,parseInt($('headerRow').value)||1)-1;const headers=data[row]||[];
+ const opts=headers.map((h,i)=>({h:clean(h)||`Column ${i+1}`,i}));
+ $('qrColumn').innerHTML=opts.map(o=>`<option value="${o.i}">${esc(o.h)}</option>`).join('');
+ $('idColumn').innerHTML='<option value="">(Not selected)</option>'+opts.map(o=>`<option value="${o.i}">${esc(o.h)}</option>`).join('');
+ const guess=opts.find(o=>/qr|code|token|value|serial/i.test(o.h));if(guess)$('qrColumn').value=guess.i;
+ const idg=opts.find(o=>/ticket.?id|id|reference|ref/i.test(o.h));if(idg)$('idColumn').value=idg.i;
+}
+$('sheetSelect').addEventListener('change',populateColumns);$('headerRow').addEventListener('change',populateColumns);
+$('loadMaster').addEventListener('click',()=>{
+ if(!workbook)return;const ws=workbook.Sheets[workbook.SheetNames[+$('sheetSelect').value]];
+ const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+ const h=Math.max(1,parseInt($('headerRow').value)||1)-1, qrCol=+$('qrColumn').value, idVal=$('idColumn').value, idCol=idVal===''?null:+idVal;
+ const headers=data[h]||[];
+ const rows=data.slice(h+1).map((r,i)=>({id:idCol===null?`Row ${h+i+2}`:clean(r[idCol])||`Row ${h+i+2}`,qr:clean(r[qrCol]),excelRow:h+i+2})).filter(r=>r.qr||r.id);
+ if(!rows.length){$('masterMessage').innerHTML='<div class="result bad">No records found. Check the selected header row and QR value column.</div>';return;}
+ if(!confirm(`Load ${rows.length} master records? This replaces the currently loaded master list. Existing scan history will be retained.`))return;
+ masterRows=rows;rebuildGroups();saveState();refresh();
+ const d=duplicateGroups().length;
+ $('masterMessage').innerHTML=`<div class="result ${d?'warn':'good'}"><strong>${d?'Master data loaded with duplicate values':'Master data loaded successfully'}</strong>${rows.length} records imported; ${masterGroups.size} distinct nonblank QR values; ${d} duplicated QR value(s).</div>`;
+});
+function verify(qr){
+ qr=clean(qr);if(!qr){showResult('INVALID SCAN','No QR content was decoded. Try again or enter the value manually.','warn');return;}
+ const matches=masterGroups.get(qr)||[];
+ let status, title, detail, cls, id='';
+ if(matches.length===0){status='UNKNOWN';title='UNKNOWN QR CODE';detail='This value does not exist in the master Excel database.';cls='bad';}
+ else if(matches.length>1){status='MASTER_DUPLICATE';title='DUPLICATE IN MASTER DATABASE';detail=`This QR value belongs to ${matches.length} master records: ${matches.map(x=>x.id).join(', ')}. Do not approve this print until the master data is corrected.`;cls='bad';}
+ else if(scans.some(s=>s.qr===qr&&s.status==='VERIFIED')){status='REPEATED_SCAN';title='ALREADY SCANNED';detail=`This printed QR has already been verified. Master record: ${matches[0].id}.`;cls='warn';id=matches[0].id;}
+ else{status='VERIFIED';title='QR CODE VERIFIED';detail=`Exact match found. Master record: ${matches[0].id}. This QR has not previously been verified in this scan history.`;cls='good';id=matches[0].id;}
+ scans.unshift({id:id||matches.map(x=>x.id).join(', ')||'—',qr,time:timeNow(),status});
+ saveState();refresh();showResult(title,detail,cls,qr);
+}
+function showResult(title,detail,cls,qr=''){$('scanResult').className='result '+cls;$('scanResult').innerHTML=`<strong>${esc(title)}</strong><span>${esc(detail)}</span>${qr?`<div class="small" style="margin-top:8px">Scanned value: <span id="scanValue">${esc(qr)}</span></div>`:''}`;}
+async function startCamera(){
+ if(!masterRows.length){alert('Import and load the master Excel file before scanning.');setTab('setup');return;}
+ if(!window.Html5Qrcode){alert('The scanner library could not load. Check your internet connection and reload this page.');return;}
+ try{
+  scanner=new Html5Qrcode('reader');cameras=await Html5Qrcode.getCameras();
+  if(!cameras.length)throw new Error('No camera found');
+  let preferred=cameras.findIndex(c=>/back|rear|environment/i.test(c.label));cameraIndex=preferred>=0?preferred:Math.max(0,cameras.length-1);
+  await launchCamera(cameras[cameraIndex].id);
+ }catch(e){$('cameraState').textContent='Camera unavailable';alert('Could not start the camera. Check browser camera permission and make sure this page is opened using HTTPS. '+e.message);}
+}
+async function launchCamera(id){
+ await scanner.start(id,{fps:10,qrbox:{width:250,height:250},aspectRatio:1.0},decoded=>{
+  const now=Date.now();if(decoded===lastDecoded&&now-lastDecodedAt<2500)return;lastDecoded=decoded;lastDecodedAt=now;verify(decoded);
+ },()=>{});
+ $('cameraState').textContent='Camera running';$('startScan').disabled=true;$('stopScan').disabled=false;
+}
+async function stopCamera(){if(scanner){try{await scanner.stop();await scanner.clear();}catch(e){}scanner=null;}$('cameraState').textContent='Camera stopped';$('startScan').disabled=false;$('stopScan').disabled=true;}
+$('startScan').addEventListener('click',startCamera);$('stopScan').addEventListener('click',stopCamera);
+$('switchCamera').addEventListener('click',async()=>{if(!cameras.length){alert('Start the camera first.');return;}let wasRunning=!!scanner;if(wasRunning)await stopCamera();cameraIndex=(cameraIndex+1)%cameras.length;scanner=new Html5Qrcode('reader');try{await launchCamera(cameras[cameraIndex].id);}catch(e){alert('Could not switch camera: '+e.message);}});
+$('manualCheck').addEventListener('click',()=>{verify($('manualValue').value);$('manualValue').value='';});
+$('manualValue').addEventListener('keydown',e=>{if(e.key==='Enter')$('manualCheck').click();});
+function table(headers,rows){if(!rows.length)return '<p class="muted">No records to display.</p>';return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;}
+function refresh(){
+ const d=duplicateGroups(),blank=masterRows.filter(r=>!r.qr).length,verified=verifiedValues();
+ $('mTotal').textContent=masterRows.length;$('mUnique').textContent=masterGroups.size;$('mDup').textContent=d.reduce((n,[v,a])=>n+a.length,0);$('mBlank').textContent=blank;
+ $('masterStatus').textContent=!masterRows.length?'Import an Excel file to begin.':d.length?`${d.length} duplicated QR value(s) detected. Resolve these records before approving affected prints.`:'No duplicate QR values found in the loaded master records.';
+ $('duplicatePreview').innerHTML=d.length?table(['QR value','Occurrences','Master record IDs'],d.slice(0,8).map(([v,a])=>`<tr><td>${esc(v)}</td><td>${a.length}</td><td>${esc(a.map(x=>x.id).join(', '))}</td></tr>`)):'';
+ const verifiedCount=[...verified].filter(v=>(masterGroups.get(v)||[]).length===1).length;
+ const unknown=scans.filter(s=>s.status==='UNKNOWN').length,repeated=scans.filter(s=>s.status==='REPEATED_SCAN').length;
+ const pending=uniqueMasterValues().filter(v=>!verified.has(v)).length;
+ $('sVerified').textContent=verifiedCount;$('sUnknown').textContent=unknown;$('sRepeated').textContent=repeated;$('sPending').textContent=pending;
+}
+function renderReports(){
+ const verified=verifiedValues(), missing=masterRows.filter(r=>r.qr&&!verified.has(r.qr));
+ $('rTotal').textContent=masterRows.length;$('rVerified').textContent=[...verified].filter(v=>(masterGroups.get(v)||[]).length===1).length;$('rMissing').textContent=missing.length;
+ $('rIssues').textContent=scans.filter(s=>s.status!=='VERIFIED').length+duplicateGroups().length;
+ $('historyTable').innerHTML=table(['Time','Record ID','QR value','Result'],scans.map(s=>`<tr><td>${esc(s.time)}</td><td>${esc(s.id)}</td><td>${esc(s.qr)}</td><td><span class="pill ${s.status==='VERIFIED'?'good':s.status==='REPEATED_SCAN'?'warn':'bad'}">${esc(s.status.replace('_',' '))}</span></td></tr>`));
+ $('missingTable').innerHTML=table(['Record ID','QR value','Excel row'],missing.map(r=>`<tr><td>${esc(r.id)}</td><td>${esc(r.qr)}</td><td>${r.excelRow}</td></tr>`));
+ $('dupTable').innerHTML=table(['QR value','Count','Record IDs'],duplicateGroups().map(([v,a])=>`<tr><td>${esc(v)}</td><td>${a.length}</td><td>${esc(a.map(x=>x.id).join(', '))}</td></tr>`));
+}
+function downloadXlsx(name,rows){if(!window.XLSX){alert('Excel export library unavailable.');return;}const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'Report');XLSX.writeFile(wb,name);}
+$('exportScans').addEventListener('click',()=>downloadXlsx('QR_Scan_History.xlsx',scans.map(s=>({'Time':s.time,'Record ID':s.id,'QR Value':s.qr,'Result':s.status}))));
+$('exportMissing').addEventListener('click',()=>{const v=verifiedValues();downloadXlsx('QR_Not_Yet_Verified.xlsx',masterRows.filter(r=>r.qr&&!v.has(r.qr)).map(r=>({'Record ID':r.id,'QR Value':r.qr,'Excel Row':r.excelRow})));});
+$('exportDuplicates').addEventListener('click',()=>downloadXlsx('QR_Master_Duplicates.xlsx',duplicateGroups().flatMap(([v,a])=>a.map(r=>({'QR Value':v,'Record ID':r.id,'Excel Row':r.excelRow,'Occurrences':a.length})))));
+restoreState();
+</script>
+</body>
+</html>
