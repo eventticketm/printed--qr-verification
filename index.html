@@ -83,6 +83,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;p
         <button id="startScan">Start camera</button>
         <button id="stopScan" class="secondary" disabled>Stop camera</button>
         <button id="switchCamera" class="secondary">Switch camera</button>
+        <button id="resetScans" class="danger">Reset scan history</button>
       </div>
       <div id="reader"></div>
       <div id="scanResult" class="result"><strong>Waiting for scan</strong><span class="muted">Your verification result will appear here.</span></div>
@@ -197,6 +198,12 @@ $('startScan').addEventListener('click',startCamera);$('stopScan').addEventListe
 $('switchCamera').addEventListener('click',async()=>{if(!cameras.length){alert('Start the camera first.');return;}let wasRunning=!!scanner;if(wasRunning)await stopCamera();cameraIndex=(cameraIndex+1)%cameras.length;scanner=new Html5Qrcode('reader');try{await launchCamera(cameras[cameraIndex].id);}catch(e){alert('Could not switch camera: '+e.message);}});
 $('manualCheck').addEventListener('click',()=>{verify($('manualValue').value);$('manualValue').value='';});
 $('manualValue').addEventListener('keydown',e=>{if(e.key==='Enter')$('manualCheck').click();});
+$('resetScans').addEventListener('click',async()=>{
+ if(!confirm('Reset all scan history and verification progress? Your master Excel database will NOT be deleted. After resetting, previously verified QR codes can be checked again.'))return;
+ if(scanner)await stopCamera();
+ scans=[];lastDecoded='';lastDecodedAt=0;saveState();refresh();
+ showResult('SCAN HISTORY RESET','All previous scan results have been cleared. Your master database is unchanged. You can now scan the printed QR codes again.','warn');
+});
 function table(headers,rows){if(!rows.length)return '<p class="muted">No records to display.</p>';return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;}
 function refresh(){
  const d=duplicateGroups(),blank=masterRows.filter(r=>!r.qr).length,verified=verifiedValues();
